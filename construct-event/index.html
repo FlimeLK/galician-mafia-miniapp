@@ -389,7 +389,10 @@
           unique_buffs_only: !!payload.unique_buffs_only
         };
         $("okMsg").style.display = "block";
-        setTimeout(() => tg.close(), 1200);
+        setTimeout(() => {
+          $("saveBtn").disabled = false;
+          $("saveBtn").textContent = "Зберегти";
+        }, 700);
       } else {
         alert("Запусти Mini App з Telegram, щоб зберегти.");
       }
