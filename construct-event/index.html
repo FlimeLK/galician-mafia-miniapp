@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Construct Event Mini App</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; background: #0f172a; color: #e2e8f0; }
+    .wrap { max-width: 520px; margin: 0 auto; padding: 16px; }
+    .card { background: #111827; border: 1px solid #1f2937; border-radius: 12px; padding: 14px; margin-bottom: 12px; }
+    h1 { font-size: 20px; margin: 0 0 12px; }
+    label { display: block; margin: 10px 0 6px; font-size: 14px; color: #cbd5e1; }
+    input[type="number"], input[type="text"] {
+      width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #334155;
+      background: #0b1220; color: #e2e8f0; box-sizing: border-box;
+    }
+    .row { display: flex; align-items: center; justify-content: space-between; margin: 10px 0; }
+    .hint { color: #94a3b8; font-size: 12px; }
+    button {
+      width: 100%; padding: 11px; border: 0; border-radius: 10px;
+      background: #2563eb; color: #fff; font-weight: 700; cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>🎛️ Construct Event</h1>
+      <div class="hint">MVP: базові налаштування групи.</div>
+    </div>
+
+    <div class="card">
+      <label for="group_id">ID групи</label>
+      <input id="group_id" type="text" placeholder="-1001234567890" />
+      <div class="hint">Вкажи групу, де ти маєш права на /construct_event.</div>
+
+      <label for="registration_time">Час реєстрації (сек.)</label>
+      <input id="registration_time" type="number" min="15" max="600" value="90" />
+
+      <div class="row">
+        <span>Бафи увімкнені</span>
+        <input id="buffs_enabled" type="checkbox" checked />
+      </div>
+      <div class="row">
+        <span>Тільки унікальні бафи</span>
+        <input id="unique_buffs_only" type="checkbox" />
+      </div>
+    </div>
+
+    <button id="saveBtn">Зберегти</button>
+  </div>
+
+  <script>
+    const tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+    if (tg) {
+      tg.ready();
+      tg.expand();
+    }
+
+    const $ = (id) => document.getElementById(id);
+    const q = new URLSearchParams(window.location.search);
+    const groupFromUrl = q.get("group_id");
+    if (groupFromUrl) $("group_id").value = groupFromUrl;
+
+    $("saveBtn").addEventListener("click", () => {
+      const payload = {
+        action: "construct_event_save",
+        group_id: $("group_id").value.trim(),
+        registration_time: Number($("registration_time").value || 90),
+        buffs_enabled: !!$("buffs_enabled").checked,
+        unique_buffs_only: !!$("unique_buffs_only").checked
+      };
+
+      if (!payload.group_id) {
+        alert("Вкажи ID групи.");
+        return;
+      }
+
+      if (tg && typeof tg.sendData === "function") {
+        tg.sendData(JSON.stringify(payload));
+        tg.close();
+      } else {
+        alert("Запусти Mini App з Telegram, щоб зберегти.");
+      }
+    });
+  </script>
+</body>
+</html>
