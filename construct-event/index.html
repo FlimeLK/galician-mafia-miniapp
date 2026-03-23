@@ -141,6 +141,31 @@
       padding:3px 8px;
       margin-bottom:8px;
     }
+    .subtabbar { display:flex; gap:8px; margin:8px 0 10px; flex-wrap:wrap; }
+    .subtab {
+      border:1px solid #2f4470;
+      background:#0f1a31;
+      color:#cfe0ff;
+      border-radius:9px;
+      padding:7px 10px;
+      font-size:12px;
+      font-weight:700;
+      cursor:pointer;
+      user-select:none;
+    }
+    .subtab.active { border-color:#4f79c7; background:#16274b; color:#fff; }
+    .buff-row {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:8px;
+      margin:7px 0;
+      padding:9px 10px;
+      border:1px solid #243453;
+      background:#0d1528;
+      border-radius:10px;
+    }
+    .buff-name { font-size:13px; color:#e4eeff; }
   </style>
 </head>
 <body>
@@ -175,6 +200,13 @@
       </div>
 
       <div class="subsection hidden" id="tab_group">
+        <div class="subtabbar">
+          <div class="subtab active" data-subtab="group_basic">Основні</div>
+          <div class="subtab" data-subtab="group_themes">Теми</div>
+          <div class="subtab" data-subtab="group_buffs">Конкретні бафи</div>
+        </div>
+
+        <div id="group_basic">
         <label for="registration_time">Час реєстрації (сек.)</label>
         <input id="registration_time" type="number" min="15" max="600" value="90" />
 
@@ -186,6 +218,23 @@
           <span>Тільки унікальні бафи</span>
           <input id="unique_buffs_only" type="checkbox" />
         </div>
+        </div>
+
+        <div id="group_themes" class="hidden">
+          <div class="row"><span>Ролі померлих приховані</span><input id="theme_hide_dead_roles" type="checkbox" /></div>
+          <div class="row"><span>Ролі вбивць приховані</span><input id="theme_hide_killer_roles" type="checkbox" /></div>
+          <div class="row"><span>Таємне голосування</span><input id="theme_secret_voting" type="checkbox" /></div>
+          <div class="row"><span>Показувати нічні цілі</span><input id="theme_show_night_targets" type="checkbox" /></div>
+          <div class="row"><span>Дозволити вбивство союзників</span><input id="theme_allow_friendly_fire" type="checkbox" /></div>
+          <div class="row"><span>Дозволити пропуск нічної дії</span><input id="theme_allow_skip_night_action" type="checkbox" /></div>
+          <div class="row"><span>Мовчанка для мертвих</span><input id="theme_silence_dead_players_enabled" type="checkbox" checked /></div>
+          <div class="row"><span>Мовчанка для не-гравців</span><input id="theme_silence_non_players_enabled" type="checkbox" checked /></div>
+        </div>
+
+        <div id="group_buffs" class="hidden">
+          <div class="hint">Тут можна вимкнути конкретні бафи для цієї групи.</div>
+          <div id="buffs_container"></div>
+        </div>
       </div>
     </div>
 
@@ -193,7 +242,6 @@
       <button class="ghost-btn" id="backBtn">Назад</button>
       <button class="save-btn" id="saveBtn">Зберегти</button>
     </div>
-    <div class="ok" id="okMsg">✅ Налаштування надіслано в бота.</div>
   </div>
 
   <script>
@@ -240,10 +288,21 @@
         return {};
       }
     }
+    function parseBuffCatalog() {
+      const raw = q.get("buff_catalog");
+      if (!raw) return [];
+      try {
+        const arr = JSON.parse(raw);
+        return Array.isArray(arr) ? arr : [];
+      } catch (e) {
+        return [];
+      }
+    }
 
     const groups = parseGroups();
     const rolePresets = parseRolePresets();
     const groupPresets = parseGroupPresets();
+    const buffCatalog = parseBuffCatalog();
     const fallbackDefaultRoles = [
       "Аль Капоне", "Мафія", "Лікар", "Мирний житель", "Комісар Каттані",
       "Сержант", "Коханка", "Маніяк", "Тілоохоронець", "Волоцюга",
@@ -314,6 +373,42 @@
       $("registration_time").value = Number.isFinite(reg) && reg > 0 ? reg : 90;
       $("buffs_enabled").checked = p.buffs_enabled !== false;
       $("unique_buffs_only").checked = !!p.unique_buffs_only;
+      const t = p.themes || {};
+      $("theme_hide_dead_roles").checked = !!t.hide_dead_roles;
+      $("theme_hide_killer_roles").checked = !!t.hide_killer_roles;
+      $("theme_secret_voting").checked = !!t.secret_voting;
+      $("theme_show_night_targets").checked = !!t.show_night_targets;
+      $("theme_allow_friendly_fire").checked = !!t.allow_friendly_fire;
+      $("theme_allow_skip_night_action").checked = !!t.allow_skip_night_action;
+      $("theme_silence_dead_players_enabled").checked = t.silence_dead_players_enabled !== false;
+      $("theme_silence_non_players_enabled").checked = t.silence_non_players_enabled !== false;
+      renderBuffsForGroup(groupId);
+    }
+
+    function renderBuffsForGroup(groupId) {
+      const box = $("buffs_container");
+      box.innerHTML = "";
+      const key = String(groupId || "");
+      const p = groupPresets[key] || {};
+      const disabled = new Set(Array.isArray(p.disabled_buff_ids) ? p.disabled_buff_ids.map((x) => String(x)) : []);
+      if (!buffCatalog.length) {
+        const empty = document.createElement("div");
+        empty.className = "hint";
+        empty.textContent = "Каталог бафів не завантажився.";
+        box.appendChild(empty);
+        return;
+      }
+      buffCatalog.forEach((b) => {
+        const row = document.createElement("div");
+        row.className = "buff-row";
+        row.dataset.buffId = String(b.id || "");
+        const enabled = !disabled.has(String(b.id || ""));
+        row.innerHTML = `
+          <div class="buff-name">${String(b.name || b.id || "")}</div>
+          <input type="checkbox" class="buff-enabled" ${enabled ? "checked" : ""} />
+        `;
+        box.appendChild(row);
+      });
     }
 
     function setStep(step) {
@@ -335,8 +430,18 @@
       $("tab_group").classList.toggle("hidden", tabName !== "group");
     }
 
+    function switchGroupSubtab(name) {
+      document.querySelectorAll(".subtab").forEach((x) => x.classList.toggle("active", x.dataset.subtab === name));
+      $("group_basic").classList.toggle("hidden", name !== "group_basic");
+      $("group_themes").classList.toggle("hidden", name !== "group_themes");
+      $("group_buffs").classList.toggle("hidden", name !== "group_buffs");
+    }
+
     document.querySelectorAll(".tab").forEach((el) => {
       el.addEventListener("click", () => switchTab(el.dataset.tab));
+    });
+    document.querySelectorAll(".subtab").forEach((el) => {
+      el.addEventListener("click", () => switchGroupSubtab(el.dataset.subtab));
     });
 
     $("continueBtn").addEventListener("click", () => {
@@ -351,6 +456,7 @@
       applyGroupSettings(gid);
       setStep("settings");
       switchTab("roles");
+      switchGroupSubtab("group_basic");
     });
 
     $("backBtn").addEventListener("click", () => setStep("group"));
@@ -367,13 +473,29 @@
             return { name, enabled, min_players };
           }).filter((x) => x.name)
         : [];
+      const disabled_buff_ids = Array.from(document.querySelectorAll("#buffs_container .buff-row"))
+        .filter((el) => !el.querySelector(".buff-enabled")?.checked)
+        .map((el) => String(el.dataset.buffId || "").trim())
+        .filter(Boolean);
+      const themes = {
+        hide_dead_roles: !!$("theme_hide_dead_roles").checked,
+        hide_killer_roles: !!$("theme_hide_killer_roles").checked,
+        secret_voting: !!$("theme_secret_voting").checked,
+        show_night_targets: !!$("theme_show_night_targets").checked,
+        allow_friendly_fire: !!$("theme_allow_friendly_fire").checked,
+        allow_skip_night_action: !!$("theme_allow_skip_night_action").checked,
+        silence_dead_players_enabled: !!$("theme_silence_dead_players_enabled").checked,
+        silence_non_players_enabled: !!$("theme_silence_non_players_enabled").checked
+      };
       const payload = {
         action: "construct_event_save",
         group_id: finalGroupId,
         registration_time: Number($("registration_time").value || 90),
         buffs_enabled: !!$("buffs_enabled").checked,
         unique_buffs_only: !!$("unique_buffs_only").checked,
-        roles_updates
+        roles_updates,
+        themes,
+        disabled_buff_ids
       };
 
       if (!payload.group_id) {
@@ -390,9 +512,10 @@
         groupPresets[gk] = {
           registration_time: Number(payload.registration_time || 90),
           buffs_enabled: !!payload.buffs_enabled,
-          unique_buffs_only: !!payload.unique_buffs_only
+          unique_buffs_only: !!payload.unique_buffs_only,
+          disabled_buff_ids: disabled_buff_ids,
+          themes
         };
-        $("okMsg").style.display = "block";
         setTimeout(() => {
           $("saveBtn").disabled = false;
           $("saveBtn").textContent = "Зберегти";
