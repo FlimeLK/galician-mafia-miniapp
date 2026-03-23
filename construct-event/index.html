@@ -91,21 +91,37 @@
       display: none;
     }
     .roles-title { margin: 4px 0 8px; font-size: 14px; color: #d9e6ff; font-weight: 700; }
-    .role-item {
-      display: grid;
-      grid-template-columns: 1fr auto auto;
-      gap: 8px;
-      align-items: center;
-      margin: 8px 0;
-      padding: 10px;
-      background: #0d1528;
-      border: 1px solid #243453;
+    .roles-layout { display:grid; grid-template-columns: 1fr; gap:10px; }
+    .roles-list {
+      max-height: 280px;
+      overflow: auto;
+      border: 1px solid #2a3d63;
       border-radius: 12px;
+      background: #0d1528;
+      padding: 6px;
     }
-    .role-name { font-size: 14px; color: #e8eefc; }
-    .role-item input[type="number"] { width: 84px; }
-    .role-extra { grid-column: 1 / -1; }
-    .role-extra input, .role-extra select { margin-top: 6px; }
+    .role-list-item {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:8px;
+      padding:9px 10px;
+      border:1px solid transparent;
+      border-radius:10px;
+      color:#dbe9ff;
+      cursor:pointer;
+      margin:4px 0;
+      background:#0f1a31;
+    }
+    .role-list-item.active { border-color:#4f79c7; background:#16274b; }
+    .role-list-meta { font-size:11px; color:#9ab0d6; }
+    .role-editor {
+      border: 1px solid #2a3d63;
+      border-radius: 12px;
+      background: #0d1528;
+      padding: 10px;
+    }
+    .role-editor .row { margin: 8px 0; }
     .hidden { display: none !important; }
     .toolbar { display:flex; gap:8px; margin-top:10px; }
     .ghost-btn {
@@ -220,8 +236,28 @@
             <option value="neutral">🟡 Нейтральна</option>
           </select>
         </div>
-        <div class="roles-title">Ролі (увімкнення + мін. гравців)</div>
-        <div id="roles_container"></div>
+        <div class="roles-title">Ролі</div>
+        <div class="roles-layout">
+          <div id="roles_list" class="roles-list"></div>
+          <div class="role-editor">
+            <label for="editor_role_name">Обрана роль</label>
+            <input id="editor_role_name" type="text" readonly />
+            <div class="row">
+              <span>Роль увімкнена</span>
+              <input id="editor_role_enabled" type="checkbox" />
+            </div>
+            <label for="editor_role_min">Мін. гравців</label>
+            <input id="editor_role_min" type="number" min="1" max="30" value="1" />
+            <label for="editor_role_alignment">Тип ролі</label>
+            <select id="editor_role_alignment">
+              <option value="good">🟢 Мирна</option>
+              <option value="evil">🔴 Зла</option>
+              <option value="neutral">🟡 Нейтральна</option>
+            </select>
+            <label for="editor_role_desc">Опис ролі</label>
+            <input id="editor_role_desc" type="text" placeholder="Опис ролі" />
+          </div>
+        </div>
       </div>
 
       <div class="subsection hidden" id="tab_group">
@@ -357,38 +393,74 @@
       sel.disabled = true;
     }
 
-    function roleRow(role) {
-      const wrap = document.createElement("div");
-      wrap.className = "role-item";
-      wrap.dataset.roleName = String(role.name || "");
-      wrap.dataset.roleIsDefault = role.is_default ? "1" : "0";
-      wrap.innerHTML = `
-        <div class="role-name">${String(role.name || "")}</div>
-        <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:12px;color:#9ab0d6;">
-          <input type="checkbox" class="role-enabled" ${role.enabled ? "checked" : ""}/>
-          on
-        </label>
-        <input type="number" class="role-min" min="1" max="30" value="${Number(role.min_players || 1)}" />
-        <div class="role-extra">
-          <select class="role-alignment">
-            <option value="good" ${(role.alignment || "good") === "good" ? "selected" : ""}>🟢 Мирна</option>
-            <option value="evil" ${(role.alignment || "good") === "evil" ? "selected" : ""}>🔴 Зла</option>
-            <option value="neutral" ${(role.alignment || "good") === "neutral" ? "selected" : ""}>🟡 Нейтральна</option>
-          </select>
-          <input type="text" class="role-desc" placeholder="Опис ролі" value="${String(role.description || "").replace(/"/g, "&quot;")}" />
-        </div>
-      `;
-      return wrap;
+    let roleStateByName = {};
+    let selectedRoleName = "";
+
+    function normalizeRole(role) {
+      return {
+        name: String(role.name || "").trim(),
+        enabled: role.enabled !== false,
+        min_players: Math.max(1, Math.min(30, Number(role.min_players || 1))),
+        alignment: ["good", "evil", "neutral"].includes(String(role.alignment || "good")) ? String(role.alignment) : "good",
+        description: String(role.description || ""),
+        is_default: !!role.is_default
+      };
     }
 
-    function addNewRoleToUi(role) {
-      const box = $("roles_container");
-      box.appendChild(roleRow(role));
+    function renderRoleList() {
+      const box = $("roles_list");
+      box.innerHTML = "";
+      const roles = Object.values(roleStateByName).sort((a, b) => a.name.localeCompare(b.name, "uk"));
+      if (!roles.length) {
+        const empty = document.createElement("div");
+        empty.className = "hint";
+        empty.textContent = "Немає ролей для редагування.";
+        box.appendChild(empty);
+        return;
+      }
+      roles.forEach((r) => {
+        const item = document.createElement("div");
+        item.className = "role-list-item" + (r.name === selectedRoleName ? " active" : "");
+        item.dataset.roleName = r.name;
+        item.innerHTML = `
+          <div>
+            <div>${r.name}</div>
+            <div class="role-list-meta">${r.alignment} • min ${r.min_players}</div>
+          </div>
+          <div class="role-list-meta">${r.enabled ? "on" : "off"}</div>
+        `;
+        item.addEventListener("click", () => {
+          selectedRoleName = r.name;
+          loadRoleToEditor();
+          renderRoleList();
+        });
+        box.appendChild(item);
+      });
+    }
+
+    function loadRoleToEditor() {
+      const r = roleStateByName[selectedRoleName];
+      if (!r) {
+        $("editor_role_name").value = "";
+        return;
+      }
+      $("editor_role_name").value = r.name;
+      $("editor_role_enabled").checked = !!r.enabled;
+      $("editor_role_min").value = String(r.min_players || 1);
+      $("editor_role_alignment").value = r.alignment || "good";
+      $("editor_role_desc").value = r.description || "";
+    }
+
+    function upsertRoleToState(role) {
+      const n = normalizeRole(role);
+      if (!n.name) return;
+      roleStateByName[n.name] = n;
+      if (!selectedRoleName) selectedRoleName = n.name;
     }
 
     function renderRolesForGroup(groupId) {
-      const box = $("roles_container");
-      box.innerHTML = "";
+      roleStateByName = {};
+      selectedRoleName = "";
       const key = String(groupId || "");
       let list = Array.isArray(rolePresets[key]) ? rolePresets[key] : [];
       if (!list.length) {
@@ -396,13 +468,13 @@
         list = fallbackDefaultRoles;
       }
       if (!list.length) {
-        const empty = document.createElement("div");
-        empty.className = "hint";
-        empty.textContent = "Для цієї групи пресет ролей ще не завантажився. Можна зберігати базові налаштування.";
-        box.appendChild(empty);
+        renderRoleList();
         return;
       }
-      list.forEach((r) => box.appendChild(roleRow(r)));
+      list.forEach((r) => upsertRoleToState(r));
+      selectedRoleName = Object.keys(roleStateByName)[0] || "";
+      renderRoleList();
+      loadRoleToEditor();
     }
 
     function applyGroupSettings(groupId) {
@@ -501,19 +573,45 @@
     $("backBtn").addEventListener("click", () => setStep("group"));
     setStep("group");
 
+    function bindRoleEditor() {
+      $("editor_role_enabled").addEventListener("change", () => {
+        const r = roleStateByName[selectedRoleName];
+        if (!r) return;
+        r.enabled = !!$("editor_role_enabled").checked;
+        renderRoleList();
+      });
+      $("editor_role_min").addEventListener("input", () => {
+        const r = roleStateByName[selectedRoleName];
+        if (!r) return;
+        const v = Number($("editor_role_min").value || 1);
+        r.min_players = Math.max(1, Math.min(30, Number.isFinite(v) ? v : 1));
+        renderRoleList();
+      });
+      $("editor_role_alignment").addEventListener("change", () => {
+        const r = roleStateByName[selectedRoleName];
+        if (!r) return;
+        const v = String($("editor_role_alignment").value || "good");
+        r.alignment = ["good", "evil", "neutral"].includes(v) ? v : "good";
+        renderRoleList();
+      });
+      $("editor_role_desc").addEventListener("input", () => {
+        const r = roleStateByName[selectedRoleName];
+        if (!r) return;
+        r.description = String($("editor_role_desc").value || "");
+      });
+    }
+    bindRoleEditor();
+
     $("saveBtn").addEventListener("click", () => {
       const finalGroupId = $("group_id").value.trim() || (sel.value || "").trim();
       const isRolesTab = (window.__activeTab || "roles") === "roles";
-      const roles_updates = isRolesTab
-        ? Array.from(document.querySelectorAll(".role-item")).map((el) => {
-            const name = (el.dataset.roleName || "").trim();
-            const enabled = !!el.querySelector(".role-enabled")?.checked;
-            const min_players = Number(el.querySelector(".role-min")?.value || 1);
-            const alignment = String(el.querySelector(".role-alignment")?.value || "good").trim();
-            const description = String(el.querySelector(".role-desc")?.value || "").trim();
-            return { name, enabled, min_players, alignment, description };
-          }).filter((x) => x.name)
-        : [];
+      const roles_updates = isRolesTab ? Object.values(roleStateByName).map((r) => ({
+        name: r.name,
+        enabled: !!r.enabled,
+        min_players: Number(r.min_players || 1),
+        alignment: r.alignment || "good",
+        description: r.description || ""
+      })) : [];
       const newRoleName = ($("new_role_name").value || "").trim();
       const newRoleDesc = ($("new_role_desc").value || "").trim();
       const newRoleMin = Number($("new_role_min").value || 1);
@@ -572,7 +670,17 @@
           themes
         };
         if (create_role) {
-          addNewRoleToUi({ name: create_role.name, enabled: true, min_players: create_role.min_players || 1 });
+          upsertRoleToState({
+            name: create_role.name,
+            enabled: true,
+            min_players: create_role.min_players || 1,
+            alignment: create_role.alignment || "good",
+            description: create_role.description || "",
+            is_default: false
+          });
+          selectedRoleName = create_role.name;
+          renderRoleList();
+          loadRoleToEditor();
           $("new_role_name").value = "";
           $("new_role_desc").value = "";
           $("new_role_min").value = "1";
