@@ -377,6 +377,9 @@
         const obj = JSON.parse(raw);
         return obj && typeof obj === "object" ? obj : {};
       } catch (e) {
+        // Якщо role_presets не розпарсився (часто через надто довгий URL), не мовчимо:
+        // користувач побачить причину замість "дивної" fallback-конфігурації.
+        alert("Не вдалося завантажити налаштування ролей (дані занадто великі). Відкрий /construct_event ще раз.");
         return {};
       }
     }
