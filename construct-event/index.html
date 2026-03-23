@@ -449,6 +449,19 @@
     let roleStateByName = {};
     let selectedRoleName = "";
 
+    function alignmentLabel(v) {
+      const x = String(v || "good");
+      if (x === "evil") return "Зла";
+      if (x === "neutral") return "Нейтральна";
+      return "Добра";
+    }
+    function factionLabel(v) {
+      const x = String(v || "civilians");
+      if (x === "mafia") return "Мафія";
+      if (x === "neutral") return "Нейтрали";
+      return "Мирні";
+    }
+
     function normalizeRole(role) {
       const alignRaw = String(role.alignment || "good").trim().toLowerCase();
       const alignment =
@@ -522,7 +535,7 @@
         item.innerHTML = `
           <div>
             <div>${r.name}</div>
-            <div class="role-list-meta">${r.alignment} • ${r.faction} • min ${r.min_players}</div>
+            <div class="role-list-meta">${alignmentLabel(r.alignment)} • ${factionLabel(r.faction)} • min ${r.min_players}</div>
           </div>
           <div class="role-list-meta">${r.enabled ? "on" : "off"}</div>
         `;
