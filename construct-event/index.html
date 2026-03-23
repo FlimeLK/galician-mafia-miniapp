@@ -327,6 +327,7 @@
     }
 
     function switchTab(tabName) {
+      window.__activeTab = tabName;
       document.querySelectorAll(".tab").forEach((t) => {
         t.classList.toggle("active", t.dataset.tab === tabName);
       });
@@ -357,12 +358,15 @@
 
     $("saveBtn").addEventListener("click", () => {
       const finalGroupId = $("group_id").value.trim() || (sel.value || "").trim();
-      const roles_updates = Array.from(document.querySelectorAll(".role-item")).map((el) => {
-        const name = (el.dataset.roleName || "").trim();
-        const enabled = !!el.querySelector(".role-enabled")?.checked;
-        const min_players = Number(el.querySelector(".role-min")?.value || 1);
-        return { name, enabled, min_players };
-      }).filter((x) => x.name);
+      const isRolesTab = (window.__activeTab || "roles") === "roles";
+      const roles_updates = isRolesTab
+        ? Array.from(document.querySelectorAll(".role-item")).map((el) => {
+            const name = (el.dataset.roleName || "").trim();
+            const enabled = !!el.querySelector(".role-enabled")?.checked;
+            const min_players = Number(el.querySelector(".role-min")?.value || 1);
+            return { name, enabled, min_players };
+          }).filter((x) => x.name)
+        : [];
       const payload = {
         action: "construct_event_save",
         group_id: finalGroupId,
