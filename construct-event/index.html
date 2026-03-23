@@ -90,6 +90,20 @@
       padding: 10px 12px;
       display: none;
     }
+    .roles-title { margin: 4px 0 8px; font-size: 14px; color: #d9e6ff; font-weight: 700; }
+    .role-item {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px;
+      align-items: center;
+      margin: 8px 0;
+      padding: 10px;
+      background: #0d1528;
+      border: 1px solid #243453;
+      border-radius: 12px;
+    }
+    .role-name { font-size: 14px; color: #e8eefc; }
+    .role-item input[type="number"] { width: 84px; }
   </style>
 </head>
 <body>
@@ -118,6 +132,9 @@
         <span>Тільки унікальні бафи</span>
         <input id="unique_buffs_only" type="checkbox" />
       </div>
+
+      <div class="roles-title">Ролі (увімкнення + мін. гравців)</div>
+      <div id="roles_container"></div>
     </div>
 
     <button class="save-btn" id="saveBtn">Зберегти</button>
@@ -148,7 +165,19 @@
       }
     }
 
+    function parseRolePresets() {
+      const raw = q.get("role_presets");
+      if (!raw) return {};
+      try {
+        const obj = JSON.parse(raw);
+        return obj && typeof obj === "object" ? obj : {};
+      } catch (e) {
+        return {};
+      }
+    }
+
     const groups = parseGroups();
+    const rolePresets = parseRolePresets();
     const sel = $("group_select");
     const defaultGid = (q.get("default_gid") || "").trim();
     if (groups.length > 0) {
@@ -162,6 +191,7 @@
       $("group_id").value = sel.value || "";
       sel.addEventListener("change", () => {
         $("group_id").value = sel.value || "";
+        renderRolesForGroup($("group_id").value.trim());
       });
     } else {
       const opt = document.createElement("option");
@@ -171,14 +201,53 @@
       sel.disabled = true;
     }
 
+    function roleRow(role) {
+      const wrap = document.createElement("div");
+      wrap.className = "role-item";
+      wrap.dataset.roleName = String(role.name || "");
+      wrap.innerHTML = `
+        <div class="role-name">${String(role.name || "")}</div>
+        <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:12px;color:#9ab0d6;">
+          <input type="checkbox" class="role-enabled" ${role.enabled ? "checked" : ""}/>
+          on
+        </label>
+        <input type="number" class="role-min" min="1" max="30" value="${Number(role.min_players || 1)}" />
+      `;
+      return wrap;
+    }
+
+    function renderRolesForGroup(groupId) {
+      const box = $("roles_container");
+      box.innerHTML = "";
+      const key = String(groupId || "");
+      const list = Array.isArray(rolePresets[key]) ? rolePresets[key] : [];
+      if (!list.length) {
+        const empty = document.createElement("div");
+        empty.className = "hint";
+        empty.textContent = "Для цієї групи пресет ролей ще не завантажився. Можна зберігати базові налаштування.";
+        box.appendChild(empty);
+        return;
+      }
+      list.forEach((r) => box.appendChild(roleRow(r)));
+    }
+
+    renderRolesForGroup($("group_id").value.trim());
+
     $("saveBtn").addEventListener("click", () => {
       const finalGroupId = $("group_id").value.trim() || (sel.value || "").trim();
+      const roles_updates = Array.from(document.querySelectorAll(".role-item")).map((el) => {
+        const name = (el.dataset.roleName || "").trim();
+        const enabled = !!el.querySelector(".role-enabled")?.checked;
+        const min_players = Number(el.querySelector(".role-min")?.value || 1);
+        return { name, enabled, min_players };
+      }).filter((x) => x.name);
       const payload = {
         action: "construct_event_save",
         group_id: finalGroupId,
         registration_time: Number($("registration_time").value || 90),
         buffs_enabled: !!$("buffs_enabled").checked,
-        unique_buffs_only: !!$("unique_buffs_only").checked
+        unique_buffs_only: !!$("unique_buffs_only").checked,
+        roles_updates
       };
 
       if (!payload.group_id) {
