@@ -104,40 +104,95 @@
     }
     .role-name { font-size: 14px; color: #e8eefc; }
     .role-item input[type="number"] { width: 84px; }
+    .hidden { display: none !important; }
+    .toolbar { display:flex; gap:8px; margin-top:10px; }
+    .ghost-btn {
+      width: 100%;
+      padding: 11px;
+      border-radius: 12px;
+      border: 1px solid #365081;
+      background: #13203b;
+      color: #dbe9ff;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .tabbar { display:flex; gap:8px; margin: 10px 0 8px; }
+    .tab {
+      flex:1;
+      text-align:center;
+      border:1px solid #2f4470;
+      background:#0f1a31;
+      color:#cfe0ff;
+      border-radius:10px;
+      padding:8px 6px;
+      font-size:13px;
+      font-weight:700;
+      cursor:pointer;
+      user-select:none;
+    }
+    .tab.active { border-color:#4f79c7; background:#16274b; color:#fff; }
+    .subsection { margin-top: 8px; }
+    .pill {
+      display:inline-block;
+      font-size:11px;
+      color:#9db6e6;
+      border:1px solid #2b3f66;
+      border-radius:999px;
+      padding:3px 8px;
+      margin-bottom:8px;
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="hero">
+    <div class="hero" id="heroCard">
       <h1>🎛️ Construct Event</h1>
-      <div class="hint">Сучасна панель налаштувань групи.</div>
+      <div class="hint" id="heroHint">Сучасна панель налаштувань групи.</div>
     </div>
 
-    <div class="card">
+    <div class="card" id="stepGroupCard">
       <label for="group_select">Група</label>
       <select id="group_select"></select>
 
       <label for="group_id">Або ID групи вручну</label>
       <input id="group_id" type="text" placeholder="-1001234567890" />
       <div class="hint">Список груп підтягується автоматично з прав /construct_event.</div>
-
-      <label for="registration_time">Час реєстрації (сек.)</label>
-      <input id="registration_time" type="number" min="15" max="600" value="90" />
-
-      <div class="row">
-        <span>Бафи увімкнені</span>
-        <input id="buffs_enabled" type="checkbox" checked />
+      <div class="toolbar">
+        <button class="save-btn" id="continueBtn">Продовжити</button>
       </div>
-      <div class="row">
-        <span>Тільки унікальні бафи</span>
-        <input id="unique_buffs_only" type="checkbox" />
-      </div>
-
-      <div class="roles-title">Ролі (увімкнення + мін. гравців)</div>
-      <div id="roles_container"></div>
     </div>
 
-    <button class="save-btn" id="saveBtn">Зберегти</button>
+    <div class="card hidden" id="stepSettingsCard">
+      <div class="pill" id="selectedGroupPill">Група: -</div>
+      <div class="tabbar">
+        <div class="tab active" data-tab="roles">Ролі</div>
+        <div class="tab" data-tab="group">Група</div>
+      </div>
+
+      <div class="subsection" id="tab_roles">
+        <div class="roles-title">Ролі (увімкнення + мін. гравців)</div>
+        <div id="roles_container"></div>
+      </div>
+
+      <div class="subsection hidden" id="tab_group">
+        <label for="registration_time">Час реєстрації (сек.)</label>
+        <input id="registration_time" type="number" min="15" max="600" value="90" />
+
+        <div class="row">
+          <span>Бафи увімкнені</span>
+          <input id="buffs_enabled" type="checkbox" checked />
+        </div>
+        <div class="row">
+          <span>Тільки унікальні бафи</span>
+          <input id="unique_buffs_only" type="checkbox" />
+        </div>
+      </div>
+    </div>
+
+    <div class="toolbar hidden" id="settingsActions">
+      <button class="ghost-btn" id="backBtn">Назад</button>
+      <button class="save-btn" id="saveBtn">Зберегти</button>
+    </div>
     <div class="ok" id="okMsg">✅ Налаштування надіслано в бота.</div>
   </div>
 
@@ -178,6 +233,12 @@
 
     const groups = parseGroups();
     const rolePresets = parseRolePresets();
+    const fallbackDefaultRoles = [
+      "Аль Капоне", "Мафія", "Лікар", "Мирний житель", "Комісар Каттані",
+      "Сержант", "Коханка", "Маніяк", "Тілоохоронець", "Волоцюга",
+      "Камікадзе", "Щасливчик", "Самогубець", "Мед. сестра", "Журналіст",
+      "Адвокат", "Клоун", "Брехун", "Диявол", "Шериф"
+    ].map((name) => ({ name, enabled: true, min_players: 1 }));
     const sel = $("group_select");
     const defaultGid = (q.get("default_gid") || "").trim();
     if (groups.length > 0) {
@@ -220,7 +281,11 @@
       const box = $("roles_container");
       box.innerHTML = "";
       const key = String(groupId || "");
-      const list = Array.isArray(rolePresets[key]) ? rolePresets[key] : [];
+      let list = Array.isArray(rolePresets[key]) ? rolePresets[key] : [];
+      if (!list.length) {
+        // fallback: базовий набір ролей, щоб конструктор працював навіть без пресету з бекенду
+        list = fallbackDefaultRoles;
+      }
       if (!list.length) {
         const empty = document.createElement("div");
         empty.className = "hint";
@@ -231,7 +296,43 @@
       list.forEach((r) => box.appendChild(roleRow(r)));
     }
 
-    renderRolesForGroup($("group_id").value.trim());
+    function setStep(step) {
+      const isSettings = step === "settings";
+      $("stepGroupCard").classList.toggle("hidden", isSettings);
+      $("stepSettingsCard").classList.toggle("hidden", !isSettings);
+      $("settingsActions").classList.toggle("hidden", !isSettings);
+      $("heroHint").textContent = isSettings
+        ? "Налаштуй ролі та параметри групи."
+        : "Спочатку обери групу.";
+    }
+
+    function switchTab(tabName) {
+      document.querySelectorAll(".tab").forEach((t) => {
+        t.classList.toggle("active", t.dataset.tab === tabName);
+      });
+      $("tab_roles").classList.toggle("hidden", tabName !== "roles");
+      $("tab_group").classList.toggle("hidden", tabName !== "group");
+    }
+
+    document.querySelectorAll(".tab").forEach((el) => {
+      el.addEventListener("click", () => switchTab(el.dataset.tab));
+    });
+
+    $("continueBtn").addEventListener("click", () => {
+      const gid = $("group_id").value.trim() || (sel.value || "").trim();
+      if (!gid) {
+        alert("Обери або введи ID групи.");
+        return;
+      }
+      $("group_id").value = gid;
+      $("selectedGroupPill").textContent = `Група: ${gid}`;
+      renderRolesForGroup(gid);
+      setStep("settings");
+      switchTab("roles");
+    });
+
+    $("backBtn").addEventListener("click", () => setStep("group"));
+    setStep("group");
 
     $("saveBtn").addEventListener("click", () => {
       const finalGroupId = $("group_id").value.trim() || (sel.value || "").trim();
