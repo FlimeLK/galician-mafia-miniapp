@@ -294,8 +294,8 @@
             </select>
             <label for="editor_role_desc">Опис ролі</label>
             <input id="editor_role_desc" type="text" placeholder="Опис ролі" />
-            <label>Бафи ролі</label>
-            <div class="hint">Вибери бафи, які привʼязані до цієї ролі.</div>
+            <label>Можливості ролі</label>
+            <div class="hint">Вибери дії, які має ця роль.</div>
             <div id="editor_role_buffs" class="role-buffs"></div>
           </div>
         </div>
@@ -405,12 +405,21 @@
     const rolePresets = parseRolePresets();
     const groupPresets = parseGroupPresets();
     const buffCatalog = parseBuffCatalog();
+    const abilityCatalog = [
+      { id: "kill", name: "Вбивство" },
+      { id: "heal", name: "Лікування" },
+      { id: "check_role", name: "Перевірка ролі" },
+      { id: "block_action", name: "Блок дії" },
+      { id: "protect", name: "Захист" },
+      { id: "inspect", name: "Розслідування" },
+      { id: "custom_effect", name: "Кастомний ефект" }
+    ];
     const fallbackDefaultRoles = [
       "Аль Капоне", "Мафія", "Лікар", "Мирний житель", "Комісар Каттані",
       "Сержант", "Коханка", "Маніяк", "Тілоохоронець", "Волоцюга",
       "Камікадзе", "Щасливчик", "Самогубець", "Мед. сестра", "Журналіст",
       "Адвокат", "Клоун", "Брехун", "Диявол", "Шериф"
-    ].map((name) => ({ name, enabled: true, min_players: 1, description: "", alignment: "good", faction: "civilians", role_buff_ids: [], is_default: true }));
+    ].map((name) => ({ name, enabled: true, min_players: 1, description: "", alignment: "good", faction: "civilians", role_ability_types: [], is_default: true }));
     const sel = $("group_select");
     const defaultGid = (q.get("default_gid") || "").trim();
     if (groups.length > 0) {
@@ -451,7 +460,7 @@
         alignment,
         faction,
         description: String(role.description || ""),
-        role_buff_ids: Array.isArray(role.role_buff_ids) ? role.role_buff_ids.map((x) => String(x)) : [],
+        role_ability_types: Array.isArray(role.role_ability_types) ? role.role_ability_types.map((x) => String(x)) : [],
         is_default: !!role.is_default
       };
     }
@@ -461,15 +470,15 @@
       box.innerHTML = "";
       const r = roleStateByName[selectedRoleName];
       if (!r) return;
-      const selected = new Set(Array.isArray(r.role_buff_ids) ? r.role_buff_ids.map((x) => String(x)) : []);
-      if (!buffCatalog.length) {
+      const selected = new Set(Array.isArray(r.role_ability_types) ? r.role_ability_types.map((x) => String(x)) : []);
+      if (!abilityCatalog.length) {
         const empty = document.createElement("div");
         empty.className = "hint";
-        empty.textContent = "Каталог бафів недоступний.";
+        empty.textContent = "Каталог можливостей недоступний.";
         box.appendChild(empty);
         return;
       }
-      buffCatalog.forEach((b) => {
+      abilityCatalog.forEach((b) => {
         const bid = String(b.id || "");
         const row = document.createElement("label");
         row.className = "role-buff-row";
@@ -487,7 +496,7 @@
             .filter((x) => x.checked)
             .map((x) => String(x.dataset.buffId || "").trim())
             .filter(Boolean);
-          rr.role_buff_ids = Array.from(new Set(all)).sort();
+          rr.role_ability_types = Array.from(new Set(all)).sort();
         });
       });
     }
@@ -706,7 +715,7 @@
         alignment: r.alignment || "good",
         faction: r.faction || "civilians",
         description: r.description || "",
-        role_buff_ids: Array.isArray(r.role_buff_ids) ? r.role_buff_ids : []
+        role_ability_types: Array.isArray(r.role_ability_types) ? r.role_ability_types : []
       })) : [];
       const newRoleName = ($("new_role_name").value || "").trim();
       const newRoleDesc = ($("new_role_desc").value || "").trim();
@@ -722,7 +731,8 @@
           min_players: Number.isFinite(newRoleMin) ? newRoleMin : 1,
           alignment: ["good", "evil", "neutral"].includes(newRoleAlignment) ? newRoleAlignment : "good",
           faction: ["civilians", "mafia", "neutral"].includes(newRoleFaction) ? newRoleFaction : "civilians",
-          enabled: newRoleEnabled
+          enabled: newRoleEnabled,
+          role_ability_types: []
         };
       }
       const disabled_buff_ids = Array.from(document.querySelectorAll("#buffs_container .buff-row"))
@@ -776,7 +786,7 @@
             min_players: create_role.min_players || 1,
             alignment: create_role.alignment || "good",
             faction: create_role.faction || "civilians",
-            role_buff_ids: [],
+            role_ability_types: [],
             description: create_role.description || "",
             is_default: false
           });
