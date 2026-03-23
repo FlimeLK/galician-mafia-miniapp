@@ -235,6 +235,16 @@
             <option value="evil">🔴 Зла</option>
             <option value="neutral">🟡 Нейтральна</option>
           </select>
+          <label for="new_role_faction">Фракція</label>
+          <select id="new_role_faction">
+            <option value="civilians">Мирні</option>
+            <option value="mafia">Мафія</option>
+            <option value="neutral">Нейтрали</option>
+          </select>
+          <div class="row">
+            <span>Створити увімкненою</span>
+            <input id="new_role_enabled" type="checkbox" checked />
+          </div>
         </div>
         <div class="roles-title">Ролі</div>
         <div class="roles-layout">
@@ -253,6 +263,12 @@
               <option value="good">🟢 Мирна</option>
               <option value="evil">🔴 Зла</option>
               <option value="neutral">🟡 Нейтральна</option>
+            </select>
+            <label for="editor_role_faction">Фракція</label>
+            <select id="editor_role_faction">
+              <option value="civilians">Мирні</option>
+              <option value="mafia">Мафія</option>
+              <option value="neutral">Нейтрали</option>
             </select>
             <label for="editor_role_desc">Опис ролі</label>
             <input id="editor_role_desc" type="text" placeholder="Опис ролі" />
@@ -369,7 +385,7 @@
       "Сержант", "Коханка", "Маніяк", "Тілоохоронець", "Волоцюга",
       "Камікадзе", "Щасливчик", "Самогубець", "Мед. сестра", "Журналіст",
       "Адвокат", "Клоун", "Брехун", "Диявол", "Шериф"
-    ].map((name) => ({ name, enabled: true, min_players: 1, description: "", alignment: "good", is_default: true }));
+    ].map((name) => ({ name, enabled: true, min_players: 1, description: "", alignment: "good", faction: "civilians", is_default: true }));
     const sel = $("group_select");
     const defaultGid = (q.get("default_gid") || "").trim();
     if (groups.length > 0) {
@@ -397,11 +413,18 @@
     let selectedRoleName = "";
 
     function normalizeRole(role) {
+      const alignRaw = String(role.alignment || "good").trim().toLowerCase();
+      const alignment =
+        alignRaw.includes("evil") || alignRaw.includes("mafia") ? "evil" :
+        alignRaw.includes("neutral") ? "neutral" : "good";
+      const factionRaw = String(role.faction || "civilians").trim().toLowerCase();
+      const faction = ["civilians", "mafia", "neutral"].includes(factionRaw) ? factionRaw : "civilians";
       return {
         name: String(role.name || "").trim(),
         enabled: role.enabled !== false,
         min_players: Math.max(1, Math.min(30, Number(role.min_players || 1))),
-        alignment: ["good", "evil", "neutral"].includes(String(role.alignment || "good")) ? String(role.alignment) : "good",
+        alignment,
+        faction,
         description: String(role.description || ""),
         is_default: !!role.is_default
       };
@@ -425,7 +448,7 @@
         item.innerHTML = `
           <div>
             <div>${r.name}</div>
-            <div class="role-list-meta">${r.alignment} • min ${r.min_players}</div>
+            <div class="role-list-meta">${r.alignment} • ${r.faction} • min ${r.min_players}</div>
           </div>
           <div class="role-list-meta">${r.enabled ? "on" : "off"}</div>
         `;
@@ -448,6 +471,7 @@
       $("editor_role_enabled").checked = !!r.enabled;
       $("editor_role_min").value = String(r.min_players || 1);
       $("editor_role_alignment").value = r.alignment || "good";
+      $("editor_role_faction").value = r.faction || "civilians";
       $("editor_role_desc").value = r.description || "";
     }
 
@@ -594,6 +618,13 @@
         r.alignment = ["good", "evil", "neutral"].includes(v) ? v : "good";
         renderRoleList();
       });
+      $("editor_role_faction").addEventListener("change", () => {
+        const r = roleStateByName[selectedRoleName];
+        if (!r) return;
+        const v = String($("editor_role_faction").value || "civilians");
+        r.faction = ["civilians", "mafia", "neutral"].includes(v) ? v : "civilians";
+        renderRoleList();
+      });
       $("editor_role_desc").addEventListener("input", () => {
         const r = roleStateByName[selectedRoleName];
         if (!r) return;
@@ -610,19 +641,24 @@
         enabled: !!r.enabled,
         min_players: Number(r.min_players || 1),
         alignment: r.alignment || "good",
+        faction: r.faction || "civilians",
         description: r.description || ""
       })) : [];
       const newRoleName = ($("new_role_name").value || "").trim();
       const newRoleDesc = ($("new_role_desc").value || "").trim();
       const newRoleMin = Number($("new_role_min").value || 1);
       const newRoleAlignment = ($("new_role_alignment").value || "good").trim();
+      const newRoleFaction = ($("new_role_faction").value || "civilians").trim();
+      const newRoleEnabled = !!$("new_role_enabled").checked;
       let create_role = null;
       if (newRoleName) {
         create_role = {
           name: newRoleName,
           description: newRoleDesc || `Кастомна роль: ${newRoleName}`,
           min_players: Number.isFinite(newRoleMin) ? newRoleMin : 1,
-          alignment: ["good", "evil", "neutral"].includes(newRoleAlignment) ? newRoleAlignment : "good"
+          alignment: ["good", "evil", "neutral"].includes(newRoleAlignment) ? newRoleAlignment : "good",
+          faction: ["civilians", "mafia", "neutral"].includes(newRoleFaction) ? newRoleFaction : "civilians",
+          enabled: newRoleEnabled
         };
       }
       const disabled_buff_ids = Array.from(document.querySelectorAll("#buffs_container .buff-row"))
@@ -672,9 +708,10 @@
         if (create_role) {
           upsertRoleToState({
             name: create_role.name,
-            enabled: true,
+            enabled: !!create_role.enabled,
             min_players: create_role.min_players || 1,
             alignment: create_role.alignment || "good",
+            faction: create_role.faction || "civilians",
             description: create_role.description || "",
             is_default: false
           });
@@ -685,6 +722,8 @@
           $("new_role_desc").value = "";
           $("new_role_min").value = "1";
           $("new_role_alignment").value = "good";
+          $("new_role_faction").value = "civilians";
+          $("new_role_enabled").checked = true;
         }
         setTimeout(() => {
           $("saveBtn").disabled = false;
