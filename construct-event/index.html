@@ -298,6 +298,9 @@
             <option value="mafia">Мафія</option>
             <option value="neutral">Нейтрали</option>
           </select>
+          <label>Можливості ролі</label>
+          <div class="hint">Вибери дії, які має нова роль (вбивство, лікування тощо).</div>
+          <div id="new_role_abilities" class="role-buffs"></div>
           <div class="row">
             <span>Створити увімкненою</span>
             <input id="new_role_enabled" type="checkbox" checked />
@@ -522,6 +525,39 @@
       });
     }
 
+    function getNewRoleAbilityTypes() {
+      const box = $("new_role_abilities");
+      if (!box) return [];
+      return Array.from(box.querySelectorAll(".new-role-ability-check"))
+        .filter((x) => x.checked)
+        .map((x) => String(x.dataset.buffId || "").trim())
+        .filter(Boolean)
+        .sort();
+    }
+
+    function renderNewRoleAbilities() {
+      const box = $("new_role_abilities");
+      if (!box) return;
+      box.innerHTML = "";
+      if (!abilityCatalog.length) {
+        const empty = document.createElement("div");
+        empty.className = "hint";
+        empty.textContent = "Каталог можливостей недоступний.";
+        box.appendChild(empty);
+        return;
+      }
+      abilityCatalog.forEach((b) => {
+        const bid = String(b.id || "");
+        const row = document.createElement("label");
+        row.className = "role-buff-row";
+        row.innerHTML = `
+          <span>${String(b.name || bid)}</span>
+          <input type="checkbox" class="new-role-ability-check" data-buff-id="${bid}" />
+        `;
+        box.appendChild(row);
+      });
+    }
+
     function renderRoleList() {
       const box = $("roles_list");
       box.innerHTML = "";
@@ -690,6 +726,7 @@
 
     $("backBtn").addEventListener("click", () => setStep("group"));
     setStep("group");
+    renderNewRoleAbilities();
 
     function bindRoleEditor() {
       $("editor_role_enabled").addEventListener("change", () => {
@@ -756,7 +793,7 @@
           alignment: ["good", "evil", "neutral"].includes(newRoleAlignment) ? newRoleAlignment : "good",
           faction: ["civilians", "mafia", "neutral"].includes(newRoleFaction) ? newRoleFaction : "civilians",
           enabled: newRoleEnabled,
-          role_ability_types: []
+          role_ability_types: getNewRoleAbilityTypes()
         };
       }
       const disabled_buff_ids = Array.from(document.querySelectorAll("#buffs_container .buff-row"))
@@ -810,7 +847,7 @@
             min_players: create_role.min_players || 1,
             alignment: create_role.alignment || "good",
             faction: create_role.faction || "civilians",
-            role_ability_types: [],
+            role_ability_types: Array.isArray(create_role.role_ability_types) ? create_role.role_ability_types : [],
             description: create_role.description || "",
             is_default: false
           });
@@ -823,6 +860,7 @@
           $("new_role_alignment").value = "good";
           $("new_role_faction").value = "civilians";
           $("new_role_enabled").checked = true;
+          renderNewRoleAbilities();
           switchTab("roles");
         }
         setTimeout(() => {
