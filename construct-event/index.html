@@ -122,6 +122,28 @@
       padding: 10px;
     }
     .role-editor .row { margin: 8px 0; }
+    .role-buffs {
+      max-height: 180px;
+      overflow: auto;
+      border: 1px solid #243453;
+      border-radius: 10px;
+      padding: 6px;
+      background: #0f1a31;
+      margin-top: 6px;
+    }
+    .role-buff-row {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:8px;
+      padding:7px 8px;
+      border-radius:8px;
+      margin:4px 0;
+      background:#101c34;
+      border:1px solid #223557;
+      font-size:13px;
+      color:#dce8ff;
+    }
     .hidden { display: none !important; }
     .toolbar { display:flex; gap:8px; margin-top:10px; }
     .ghost-btn {
@@ -272,6 +294,9 @@
             </select>
             <label for="editor_role_desc">Опис ролі</label>
             <input id="editor_role_desc" type="text" placeholder="Опис ролі" />
+            <label>Бафи ролі</label>
+            <div class="hint">Вибери бафи, які привʼязані до цієї ролі.</div>
+            <div id="editor_role_buffs" class="role-buffs"></div>
           </div>
         </div>
       </div>
@@ -385,7 +410,7 @@
       "Сержант", "Коханка", "Маніяк", "Тілоохоронець", "Волоцюга",
       "Камікадзе", "Щасливчик", "Самогубець", "Мед. сестра", "Журналіст",
       "Адвокат", "Клоун", "Брехун", "Диявол", "Шериф"
-    ].map((name) => ({ name, enabled: true, min_players: 1, description: "", alignment: "good", faction: "civilians", is_default: true }));
+    ].map((name) => ({ name, enabled: true, min_players: 1, description: "", alignment: "good", faction: "civilians", role_buff_ids: [], is_default: true }));
     const sel = $("group_select");
     const defaultGid = (q.get("default_gid") || "").trim();
     if (groups.length > 0) {
@@ -426,8 +451,45 @@
         alignment,
         faction,
         description: String(role.description || ""),
+        role_buff_ids: Array.isArray(role.role_buff_ids) ? role.role_buff_ids.map((x) => String(x)) : [],
         is_default: !!role.is_default
       };
+    }
+
+    function renderRoleBuffsForEditor() {
+      const box = $("editor_role_buffs");
+      box.innerHTML = "";
+      const r = roleStateByName[selectedRoleName];
+      if (!r) return;
+      const selected = new Set(Array.isArray(r.role_buff_ids) ? r.role_buff_ids.map((x) => String(x)) : []);
+      if (!buffCatalog.length) {
+        const empty = document.createElement("div");
+        empty.className = "hint";
+        empty.textContent = "Каталог бафів недоступний.";
+        box.appendChild(empty);
+        return;
+      }
+      buffCatalog.forEach((b) => {
+        const bid = String(b.id || "");
+        const row = document.createElement("label");
+        row.className = "role-buff-row";
+        row.innerHTML = `
+          <span>${String(b.name || bid)}</span>
+          <input type="checkbox" class="editor-role-buff-check" data-buff-id="${bid}" ${selected.has(bid) ? "checked" : ""} />
+        `;
+        box.appendChild(row);
+      });
+      box.querySelectorAll(".editor-role-buff-check").forEach((el) => {
+        el.addEventListener("change", () => {
+          const rr = roleStateByName[selectedRoleName];
+          if (!rr) return;
+          const all = Array.from(box.querySelectorAll(".editor-role-buff-check"))
+            .filter((x) => x.checked)
+            .map((x) => String(x.dataset.buffId || "").trim())
+            .filter(Boolean);
+          rr.role_buff_ids = Array.from(new Set(all)).sort();
+        });
+      });
     }
 
     function renderRoleList() {
@@ -473,6 +535,7 @@
       $("editor_role_alignment").value = r.alignment || "good";
       $("editor_role_faction").value = r.faction || "civilians";
       $("editor_role_desc").value = r.description || "";
+      renderRoleBuffsForEditor();
     }
 
     function upsertRoleToState(role) {
@@ -642,7 +705,8 @@
         min_players: Number(r.min_players || 1),
         alignment: r.alignment || "good",
         faction: r.faction || "civilians",
-        description: r.description || ""
+        description: r.description || "",
+        role_buff_ids: Array.isArray(r.role_buff_ids) ? r.role_buff_ids : []
       })) : [];
       const newRoleName = ($("new_role_name").value || "").trim();
       const newRoleDesc = ($("new_role_desc").value || "").trim();
@@ -712,6 +776,7 @@
             min_players: create_role.min_players || 1,
             alignment: create_role.alignment || "good",
             faction: create_role.faction || "civilians",
+            role_buff_ids: [],
             description: create_role.description || "",
             is_default: false
           });
