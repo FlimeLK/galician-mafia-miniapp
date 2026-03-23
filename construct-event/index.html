@@ -104,6 +104,8 @@
     }
     .role-name { font-size: 14px; color: #e8eefc; }
     .role-item input[type="number"] { width: 84px; }
+    .role-extra { grid-column: 1 / -1; }
+    .role-extra input, .role-extra select { margin-top: 6px; }
     .hidden { display: none !important; }
     .toolbar { display:flex; gap:8px; margin-top:10px; }
     .ghost-btn {
@@ -166,6 +168,14 @@
       border-radius:10px;
     }
     .buff-name { font-size:13px; color:#e4eeff; }
+    .create-role-box {
+      margin: 10px 0 12px;
+      padding: 10px;
+      border: 1px solid #2a3d63;
+      border-radius: 12px;
+      background: #0d1528;
+    }
+    .create-grid { display:grid; grid-template-columns:1fr 120px; gap:8px; }
   </style>
 </head>
 <body>
@@ -195,6 +205,21 @@
       </div>
 
       <div class="subsection" id="tab_roles">
+        <div class="create-role-box">
+          <label for="new_role_name">Нова роль</label>
+          <div class="create-grid">
+            <input id="new_role_name" type="text" placeholder="Назва ролі" />
+            <input id="new_role_min" type="number" min="1" max="30" value="1" />
+          </div>
+          <label for="new_role_desc">Опис</label>
+          <input id="new_role_desc" type="text" placeholder="Короткий опис ролі" />
+          <label for="new_role_alignment">Тип ролі</label>
+          <select id="new_role_alignment">
+            <option value="good">🟢 Мирна</option>
+            <option value="evil">🔴 Зла</option>
+            <option value="neutral">🟡 Нейтральна</option>
+          </select>
+        </div>
         <div class="roles-title">Ролі (увімкнення + мін. гравців)</div>
         <div id="roles_container"></div>
       </div>
@@ -308,7 +333,7 @@
       "Сержант", "Коханка", "Маніяк", "Тілоохоронець", "Волоцюга",
       "Камікадзе", "Щасливчик", "Самогубець", "Мед. сестра", "Журналіст",
       "Адвокат", "Клоун", "Брехун", "Диявол", "Шериф"
-    ].map((name) => ({ name, enabled: true, min_players: 1 }));
+    ].map((name) => ({ name, enabled: true, min_players: 1, description: "", alignment: "good", is_default: true }));
     const sel = $("group_select");
     const defaultGid = (q.get("default_gid") || "").trim();
     if (groups.length > 0) {
@@ -336,6 +361,7 @@
       const wrap = document.createElement("div");
       wrap.className = "role-item";
       wrap.dataset.roleName = String(role.name || "");
+      wrap.dataset.roleIsDefault = role.is_default ? "1" : "0";
       wrap.innerHTML = `
         <div class="role-name">${String(role.name || "")}</div>
         <label style="display:flex;align-items:center;gap:6px;margin:0;font-size:12px;color:#9ab0d6;">
@@ -343,8 +369,21 @@
           on
         </label>
         <input type="number" class="role-min" min="1" max="30" value="${Number(role.min_players || 1)}" />
+        <div class="role-extra">
+          <select class="role-alignment">
+            <option value="good" ${(role.alignment || "good") === "good" ? "selected" : ""}>🟢 Мирна</option>
+            <option value="evil" ${(role.alignment || "good") === "evil" ? "selected" : ""}>🔴 Зла</option>
+            <option value="neutral" ${(role.alignment || "good") === "neutral" ? "selected" : ""}>🟡 Нейтральна</option>
+          </select>
+          <input type="text" class="role-desc" placeholder="Опис ролі" value="${String(role.description || "").replace(/"/g, "&quot;")}" />
+        </div>
       `;
       return wrap;
+    }
+
+    function addNewRoleToUi(role) {
+      const box = $("roles_container");
+      box.appendChild(roleRow(role));
     }
 
     function renderRolesForGroup(groupId) {
@@ -470,9 +509,24 @@
             const name = (el.dataset.roleName || "").trim();
             const enabled = !!el.querySelector(".role-enabled")?.checked;
             const min_players = Number(el.querySelector(".role-min")?.value || 1);
-            return { name, enabled, min_players };
+            const alignment = String(el.querySelector(".role-alignment")?.value || "good").trim();
+            const description = String(el.querySelector(".role-desc")?.value || "").trim();
+            return { name, enabled, min_players, alignment, description };
           }).filter((x) => x.name)
         : [];
+      const newRoleName = ($("new_role_name").value || "").trim();
+      const newRoleDesc = ($("new_role_desc").value || "").trim();
+      const newRoleMin = Number($("new_role_min").value || 1);
+      const newRoleAlignment = ($("new_role_alignment").value || "good").trim();
+      let create_role = null;
+      if (newRoleName) {
+        create_role = {
+          name: newRoleName,
+          description: newRoleDesc || `Кастомна роль: ${newRoleName}`,
+          min_players: Number.isFinite(newRoleMin) ? newRoleMin : 1,
+          alignment: ["good", "evil", "neutral"].includes(newRoleAlignment) ? newRoleAlignment : "good"
+        };
+      }
       const disabled_buff_ids = Array.from(document.querySelectorAll("#buffs_container .buff-row"))
         .filter((el) => !el.querySelector(".buff-enabled")?.checked)
         .map((el) => String(el.dataset.buffId || "").trim())
@@ -494,6 +548,7 @@
         buffs_enabled: !!$("buffs_enabled").checked,
         unique_buffs_only: !!$("unique_buffs_only").checked,
         roles_updates,
+        create_role,
         themes,
         disabled_buff_ids
       };
@@ -516,6 +571,13 @@
           disabled_buff_ids: disabled_buff_ids,
           themes
         };
+        if (create_role) {
+          addNewRoleToUi({ name: create_role.name, enabled: true, min_players: create_role.min_players || 1 });
+          $("new_role_name").value = "";
+          $("new_role_desc").value = "";
+          $("new_role_min").value = "1";
+          $("new_role_alignment").value = "good";
+        }
         setTimeout(() => {
           $("saveBtn").disabled = false;
           $("saveBtn").textContent = "Зберегти";
