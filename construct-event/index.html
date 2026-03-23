@@ -378,9 +378,18 @@
       }
 
       if (tg && typeof tg.sendData === "function") {
+        $("saveBtn").disabled = true;
+        $("saveBtn").textContent = "Надсилаю...";
         tg.sendData(JSON.stringify(payload));
+        // Локально оновлюємо пресет, щоб UI не "стрибає" назад на старе значення.
+        const gk = String(finalGroupId);
+        groupPresets[gk] = {
+          registration_time: Number(payload.registration_time || 90),
+          buffs_enabled: !!payload.buffs_enabled,
+          unique_buffs_only: !!payload.unique_buffs_only
+        };
         $("okMsg").style.display = "block";
-        setTimeout(() => tg.close(), 350);
+        setTimeout(() => tg.close(), 1200);
       } else {
         alert("Запусти Mini App з Telegram, щоб зберегти.");
       }
