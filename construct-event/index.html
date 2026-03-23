@@ -230,9 +230,20 @@
         return {};
       }
     }
+    function parseGroupPresets() {
+      const raw = q.get("group_presets");
+      if (!raw) return {};
+      try {
+        const obj = JSON.parse(raw);
+        return obj && typeof obj === "object" ? obj : {};
+      } catch (e) {
+        return {};
+      }
+    }
 
     const groups = parseGroups();
     const rolePresets = parseRolePresets();
+    const groupPresets = parseGroupPresets();
     const fallbackDefaultRoles = [
       "Аль Капоне", "Мафія", "Лікар", "Мирний житель", "Комісар Каттані",
       "Сержант", "Коханка", "Маніяк", "Тілоохоронець", "Волоцюга",
@@ -296,6 +307,15 @@
       list.forEach((r) => box.appendChild(roleRow(r)));
     }
 
+    function applyGroupSettings(groupId) {
+      const key = String(groupId || "");
+      const p = groupPresets[key] || {};
+      const reg = Number(p.registration_time);
+      $("registration_time").value = Number.isFinite(reg) && reg > 0 ? reg : 90;
+      $("buffs_enabled").checked = p.buffs_enabled !== false;
+      $("unique_buffs_only").checked = !!p.unique_buffs_only;
+    }
+
     function setStep(step) {
       const isSettings = step === "settings";
       $("stepGroupCard").classList.toggle("hidden", isSettings);
@@ -327,6 +347,7 @@
       $("group_id").value = gid;
       $("selectedGroupPill").textContent = `Група: ${gid}`;
       renderRolesForGroup(gid);
+      applyGroupSettings(gid);
       setStep("settings");
       switchTab("roles");
     });
