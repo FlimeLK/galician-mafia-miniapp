@@ -239,35 +239,11 @@
       <div class="pill" id="selectedGroupPill">Група: -</div>
       <div class="tabbar">
         <div class="tab active" data-tab="roles">Ролі</div>
+        <div class="tab" data-tab="create_role">Створення ролі</div>
         <div class="tab" data-tab="group">Група</div>
       </div>
 
       <div class="subsection" id="tab_roles">
-        <div class="create-role-box">
-          <label for="new_role_name">Нова роль</label>
-          <div class="create-grid">
-            <input id="new_role_name" type="text" placeholder="Назва ролі" />
-            <input id="new_role_min" type="number" min="1" max="30" value="1" />
-          </div>
-          <label for="new_role_desc">Опис</label>
-          <input id="new_role_desc" type="text" placeholder="Короткий опис ролі" />
-          <label for="new_role_alignment">Тип ролі</label>
-          <select id="new_role_alignment">
-            <option value="good">🟢 Мирна</option>
-            <option value="evil">🔴 Зла</option>
-            <option value="neutral">🟡 Нейтральна</option>
-          </select>
-          <label for="new_role_faction">Фракція</label>
-          <select id="new_role_faction">
-            <option value="civilians">Мирні</option>
-            <option value="mafia">Мафія</option>
-            <option value="neutral">Нейтрали</option>
-          </select>
-          <div class="row">
-            <span>Створити увімкненою</span>
-            <input id="new_role_enabled" type="checkbox" checked />
-          </div>
-        </div>
         <div class="roles-title">Ролі</div>
         <div class="roles-layout">
           <div id="roles_list" class="roles-list"></div>
@@ -298,6 +274,35 @@
             <div class="hint">Вибери дії, які має ця роль.</div>
             <div id="editor_role_buffs" class="role-buffs"></div>
           </div>
+        </div>
+      </div>
+
+      <div class="subsection hidden" id="tab_create_role">
+        <div class="create-role-box">
+          <label for="new_role_name">Нова роль</label>
+          <div class="create-grid">
+            <input id="new_role_name" type="text" placeholder="Назва ролі" />
+            <input id="new_role_min" type="number" min="1" max="30" value="1" />
+          </div>
+          <label for="new_role_desc">Опис</label>
+          <input id="new_role_desc" type="text" placeholder="Короткий опис ролі" />
+          <label for="new_role_alignment">Тип ролі</label>
+          <select id="new_role_alignment">
+            <option value="good">🟢 Мирна</option>
+            <option value="evil">🔴 Зла</option>
+            <option value="neutral">🟡 Нейтральна</option>
+          </select>
+          <label for="new_role_faction">Фракція</label>
+          <select id="new_role_faction">
+            <option value="civilians">Мирні</option>
+            <option value="mafia">Мафія</option>
+            <option value="neutral">Нейтрали</option>
+          </select>
+          <div class="row">
+            <span>Створити увімкненою</span>
+            <input id="new_role_enabled" type="checkbox" checked />
+          </div>
+          <div class="hint">Заповни поля і натисни “Зберегти”.</div>
         </div>
       </div>
 
@@ -650,6 +655,7 @@
         t.classList.toggle("active", t.dataset.tab === tabName);
       });
       $("tab_roles").classList.toggle("hidden", tabName !== "roles");
+      $("tab_create_role").classList.toggle("hidden", tabName !== "create_role");
       $("tab_group").classList.toggle("hidden", tabName !== "group");
     }
 
@@ -723,7 +729,9 @@
 
     $("saveBtn").addEventListener("click", () => {
       const finalGroupId = $("group_id").value.trim() || (sel.value || "").trim();
-      const isRolesTab = (window.__activeTab || "roles") === "roles";
+      const activeTab = (window.__activeTab || "roles");
+      const isRolesTab = activeTab === "roles";
+      const isCreateRoleTab = activeTab === "create_role";
       const roles_updates = isRolesTab ? Object.values(roleStateByName).map((r) => ({
         name: r.name,
         enabled: !!r.enabled,
@@ -740,7 +748,7 @@
       const newRoleFaction = ($("new_role_faction").value || "civilians").trim();
       const newRoleEnabled = !!$("new_role_enabled").checked;
       let create_role = null;
-      if (newRoleName) {
+      if (isCreateRoleTab && newRoleName) {
         create_role = {
           name: newRoleName,
           description: newRoleDesc || `Кастомна роль: ${newRoleName}`,
@@ -815,6 +823,7 @@
           $("new_role_alignment").value = "good";
           $("new_role_faction").value = "civilians";
           $("new_role_enabled").checked = true;
+          switchTab("roles");
         }
         setTimeout(() => {
           $("saveBtn").disabled = false;
