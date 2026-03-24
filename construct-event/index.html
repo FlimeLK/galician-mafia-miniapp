@@ -974,7 +974,12 @@
     bindRoleEditor();
 
     $("saveBtn").addEventListener("click", () => {
-      const finalGroupId = $("group_id").value.trim() || (sel.value || "").trim();
+      const finalGroupIdRaw = $("group_id").value.trim() || (sel.value || "").trim();
+      const groupIdNum = parseInt(String(finalGroupIdRaw).replace(/\s/g, ""), 10);
+      if (!Number.isFinite(groupIdNum)) {
+        alert("Невірний ID групи. Повернися на перший крок і обери групу або введи ID (число з мінусом).");
+        return;
+      }
       const activeTab = (window.__activeTab || "roles");
       const isRolesTab = activeTab === "roles";
       const isCreateRoleTab = activeTab === "create_role";
@@ -1018,7 +1023,7 @@
       };
       const payload = {
         action: "construct_event_save",
-        group_id: finalGroupId,
+        group_id: groupIdNum,
         registration_time: Number($("registration_time").value || 90),
         buffs_enabled: !!$("buffs_enabled").checked,
         unique_buffs_only: !!$("unique_buffs_only").checked,
@@ -1034,11 +1039,21 @@
       }
 
       if (tg && typeof tg.sendData === "function") {
+        const rawPayload = JSON.stringify(payload);
+        if (rawPayload.length > 4000) {
+          alert("Надто великий пакет для Telegram. Спробуй зберегти без зайвих змін у ролях або відкрий повне посилання з бота."); 
+          return;
+        }
         $("saveBtn").disabled = true;
         $("saveBtn").textContent = "Надсилаю...";
-        tg.sendData(JSON.stringify(payload));
+        tg.sendData(rawPayload);
+        try {
+          if (typeof tg.close === "function") {
+            tg.close();
+          }
+        } catch (e) { /* ignore */ }
         // Локально оновлюємо пресет, щоб UI не "стрибає" назад на старе значення.
-        const gk = String(finalGroupId);
+        const gk = String(groupIdNum);
         if (roleSaveFromWebAllowed && isRolesTab && roles_updates.length) {
           rolePresets[gk] = Object.values(roleStateByName).map((r) => ({
             name: r.name,
