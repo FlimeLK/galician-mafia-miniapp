@@ -144,6 +144,13 @@
       font-size:13px;
       color:#dce8ff;
     }
+    .role-buff-meta {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .role-buff-name { font-weight: 700; }
+    .role-buff-desc { font-size: 11px; color: #9ab0d6; }
     .hidden { display: none !important; }
     .toolbar { display:flex; gap:8px; margin-top:10px; }
     .ghost-btn {
@@ -417,13 +424,15 @@
     const groupPresets = parseGroupPresets();
     const buffCatalog = parseBuffCatalog();
     const abilityCatalog = [
-      { id: "kill", name: "Вбивство" },
-      { id: "heal", name: "Лікування" },
-      { id: "check_role", name: "Перевірка ролі" },
-      { id: "block_action", name: "Блок дії" },
-      { id: "protect", name: "Захист" },
-      { id: "inspect", name: "Розслідування" },
-      { id: "custom_effect", name: "Кастомний ефект" }
+      { id: "kill", name: "Вбивство", desc: "Обери ціль для усунення." },
+      { id: "heal", name: "Лікування", desc: "Обери ціль для лікування." },
+      { id: "check_role", name: "Перевірка ролі", desc: "Дізнатись роль конкретного гравця." },
+      { id: "block_action", name: "Блок дії", desc: "Заблокувати нічну дію гравця." },
+      { id: "protect", name: "Захист", desc: "Захистити гравця на ніч." },
+      { id: "inspect", name: "Розслідування", desc: "Отримати інформацію про ціль." },
+      { id: "custom_effect_swap_roles", name: "Обмін ролями", desc: "Поміняти ролі двох гравців місцями." },
+      { id: "custom_effect_falsify", name: "Фальсифікація", desc: "Інвертувати/підмінити результат перевірки." },
+      { id: "custom_effect_custom", name: "Спеціальний ефект", desc: "Інша авторська особлива дія." }
     ];
     const fallbackDefaultRoles = [
       "Аль Капоне", "Мафія", "Лікар", "Мирний житель", "Комісар Каттані",
@@ -507,7 +516,10 @@
         const row = document.createElement("label");
         row.className = "role-buff-row";
         row.innerHTML = `
-          <span>${String(b.name || bid)}</span>
+          <span class="role-buff-meta">
+            <span class="role-buff-name">${String(b.name || bid)}</span>
+            <span class="role-buff-desc">${String(b.desc || "")}</span>
+          </span>
           <input type="checkbox" class="editor-role-buff-check" data-buff-id="${bid}" ${selected.has(bid) ? "checked" : ""} />
         `;
         box.appendChild(row);
@@ -551,7 +563,10 @@
         const row = document.createElement("label");
         row.className = "role-buff-row";
         row.innerHTML = `
-          <span>${String(b.name || bid)}</span>
+          <span class="role-buff-meta">
+            <span class="role-buff-name">${String(b.name || bid)}</span>
+            <span class="role-buff-desc">${String(b.desc || "")}</span>
+          </span>
           <input type="checkbox" class="new-role-ability-check" data-buff-id="${bid}" />
         `;
         box.appendChild(row);
