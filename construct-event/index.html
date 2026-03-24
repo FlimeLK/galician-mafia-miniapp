@@ -465,6 +465,7 @@
       }
     }
 
+    let rolePresetsParseFailed = false;
     function parseRolePresets() {
       const raw = q.get("role_presets");
       if (!raw) return {};
@@ -472,6 +473,7 @@
         const obj = JSON.parse(raw);
         return obj && typeof obj === "object" ? obj : {};
       } catch (e) {
+        rolePresetsParseFailed = true;
         // Якщо role_presets не розпарсився (часто через надто довгий URL), не мовчимо:
         // користувач побачить причину замість "дивної" fallback-конфігурації.
         alert("Не вдалося завантажити налаштування ролей (дані занадто великі). Відкрий /construct_event ще раз.");
@@ -500,7 +502,19 @@
     }
 
     const groups = parseGroups();
+    const urlHasRolePresets = q.has("role_presets");
     const rolePresets = parseRolePresets();
+    /** Чи можна надсилати roles_updates у бота (є пресети в URL і JSON валідний). Без цього зміни в вебі тихо відкидаються. */
+    const roleSaveFromWebAllowed = urlHasRolePresets && !rolePresetsParseFailed;
+    if (!roleSaveFromWebAllowed) {
+      const hh = document.getElementById("heroHint");
+      if (hh) {
+        hh.textContent =
+          "Сучасна панель налаштувань групи.\n\n" +
+          "⚠️ Ролі з вебу зараз НЕ зберігаються в бота (у посиланні немає повних даних ролей). Кнопка «Зберегти» застосує лише вкладку «Група» / бафи. " +
+          "Щоб зберігати ролі тут — відкрий конструктор знову через /construct_event з повідомлення, де бот надіслав повний Mini App. Або міняй ролі інлайн-кнопками в чаті з ботом.";
+      }
+    }
     const groupPresets = parseGroupPresets();
     const buffCatalog = parseBuffCatalog();
     const abilityCatalog = [
@@ -565,8 +579,21 @@
     let roleStateByName = {};
     let selectedRoleName = "";
     let createRolePreviewConfirmed = false;
-    /** false — список ролей з канонічного шаблону (немає даних з БД у URL); не шлемо roles_updates, щоб не затерти БД */
-    let roleEditsTrusted = false;
+
+    /** Список ролей для groupId з role_presets; обходимо різницю ключів -100... vs число. */
+    function presetListForGroup(gidRaw) {
+      const s = String(gidRaw || "").trim();
+      if (!s || !rolePresets || typeof rolePresets !== "object") return null;
+      if (Array.isArray(rolePresets[s])) return rolePresets[s];
+      const n = Number(s);
+      if (Number.isFinite(n) && Array.isArray(rolePresets[String(n)])) return rolePresets[String(n)];
+      for (const k of Object.keys(rolePresets)) {
+        if (String(k).trim() === s) return rolePresets[k];
+        const nk = Number(k);
+        if (Number.isFinite(n) && Number.isFinite(nk) && nk === n) return rolePresets[k];
+      }
+      return null;
+    }
 
     function alignmentLabel(v) {
       const x = String(v || "good");
@@ -792,14 +819,10 @@
     function renderRolesForGroup(groupId) {
       roleStateByName = {};
       selectedRoleName = "";
-      const key = String(groupId || "");
-      let list = Array.isArray(rolePresets[key]) ? rolePresets[key] : [];
-      if (!list.length) {
-        // Немає role_presets у URL (коротке посилання) або порожній об’єкт — канонічні дефолти як у боті
+      let list = presetListForGroup(groupId);
+      if (!list || !list.length) {
+        // Немає даних для цієї групи в URL — шаблон лише для перегляду/чернетки
         list = canonicalDefaultRoles;
-        roleEditsTrusted = false;
-      } else {
-        roleEditsTrusted = true;
       }
       if (!list.length) {
         renderRoleList();
@@ -964,8 +987,8 @@
         description: r.description || "",
         role_ability_types: Array.isArray(r.role_ability_types) ? r.role_ability_types : []
       })) : [];
-      // Канонічний шаблон замість даних з БД — не перезаписуємо реальні налаштування ролей.
-      if (isRolesTab && !roleEditsTrusted) {
+      // Без role_presets у посиланні (короткий лінк) не шлемо ролі — інакше затремо БД шаблоном.
+      if (isRolesTab && !roleSaveFromWebAllowed) {
         roles_updates = [];
       }
       let create_role = null;
@@ -1016,6 +1039,18 @@
         tg.sendData(JSON.stringify(payload));
         // Локально оновлюємо пресет, щоб UI не "стрибає" назад на старе значення.
         const gk = String(finalGroupId);
+        if (roleSaveFromWebAllowed && isRolesTab && roles_updates.length) {
+          rolePresets[gk] = Object.values(roleStateByName).map((r) => ({
+            name: r.name,
+            enabled: !!r.enabled,
+            min_players: Number(r.min_players || 1),
+            alignment: r.alignment || "good",
+            faction: r.faction || "civilians",
+            description: r.description || "",
+            role_ability_types: Array.isArray(r.role_ability_types) ? r.role_ability_types : [],
+            is_default: !!r.is_default
+          }));
+        }
         groupPresets[gk] = {
           registration_time: Number(payload.registration_time || 90),
           buffs_enabled: !!payload.buffs_enabled,
