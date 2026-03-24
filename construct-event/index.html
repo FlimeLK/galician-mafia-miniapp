@@ -326,7 +326,10 @@
             <select id="editor_role_faction">
               <option value="civilians">Мирні</option>
               <option value="mafia">Мафія</option>
-              <option value="neutral">Нейтрали</option>
+              <option value="neutral">Нейтрали (загальні)</option>
+              <option value="maniac">Маніяк (соло)</option>
+              <option value="devil">Диявол</option>
+              <option value="suicide">Самогубець</option>
             </select>
             <label for="editor_role_desc">Опис ролі</label>
             <input id="editor_role_desc" type="text" placeholder="Опис ролі" />
@@ -356,7 +359,10 @@
           <select id="new_role_faction">
             <option value="civilians">Мирні</option>
             <option value="mafia">Мафія</option>
-            <option value="neutral">Нейтрали</option>
+            <option value="neutral">Нейтрали (загальні)</option>
+            <option value="maniac">Маніяк (соло)</option>
+            <option value="devil">Диявол</option>
+            <option value="suicide">Самогубець</option>
           </select>
           <label>Можливості ролі</label>
           <div class="hint">Вибери дії, які має нова роль (вбивство, лікування тощо).</div>
@@ -500,12 +506,28 @@
       { id: "custom_effect_falsify", name: "Фальсифікація", desc: "Інвертувати/підмінити результат перевірки." },
       { id: "custom_effect_custom", name: "Спеціальний ефект", desc: "Інша авторська особлива дія." }
     ];
-    const fallbackDefaultRoles = [
-      "Аль Капоне", "Мафія", "Лікар", "Мирний житель", "Комісар Каттані",
-      "Сержант", "Коханка", "Маніяк", "Тілоохоронець", "Волоцюга",
-      "Камікадзе", "Щасливчик", "Самогубець", "Мед. сестра", "Журналіст",
-      "Адвокат", "Клоун", "Брехун", "Диявол", "Шериф"
-    ].map((name) => ({ name, enabled: true, min_players: 1, description: "", alignment: "good", faction: "civilians", role_ability_types: [], is_default: true }));
+    // Як з game/role_system.py create_default_roles() — коли в URL немає role_presets (коротке посилання)
+    // або дані не завантажились; інакше всі ролі хибно виглядають як «Добра • Мирні».
+    const canonicalDefaultRoles = [
+      { name: "Аль Капоне", enabled: true, min_players: 3, description: "", alignment: "evil", faction: "mafia", role_ability_types: ["kill"], is_default: true },
+      { name: "Мафія", enabled: true, min_players: 7, description: "", alignment: "evil", faction: "mafia", role_ability_types: ["kill"], is_default: true },
+      { name: "Лікар", enabled: true, min_players: 4, description: "", alignment: "good", faction: "civilians", role_ability_types: ["heal"], is_default: true },
+      { name: "Комісар Каттані", enabled: true, min_players: 4, description: "", alignment: "good", faction: "civilians", role_ability_types: ["check_role", "kill"], is_default: true },
+      { name: "Коханка", enabled: true, min_players: 3, description: "", alignment: "neutral", faction: "civilians", role_ability_types: ["block_action"], is_default: true },
+      { name: "Маніяк", enabled: true, min_players: 16, description: "", alignment: "evil", faction: "maniac", role_ability_types: ["kill"], is_default: true },
+      { name: "Мирний житель", enabled: true, min_players: 3, description: "", alignment: "good", faction: "civilians", role_ability_types: [], is_default: true },
+      { name: "Самогубець", enabled: true, min_players: 3, description: "", alignment: "neutral", faction: "suicide", role_ability_types: [], is_default: true },
+      { name: "Волоцюга", enabled: true, min_players: 3, description: "", alignment: "good", faction: "civilians", role_ability_types: ["inspect"], is_default: true },
+      { name: "Камікадзе", enabled: true, min_players: 3, description: "", alignment: "good", faction: "civilians", role_ability_types: [], is_default: true },
+      { name: "Сержант", enabled: true, min_players: 15, description: "", alignment: "good", faction: "civilians", role_ability_types: [], is_default: true },
+      { name: "Щасливчик", enabled: true, min_players: 4, description: "", alignment: "good", faction: "civilians", role_ability_types: [], is_default: true },
+      { name: "Мед. сестра", enabled: true, min_players: 3, description: "", alignment: "good", faction: "civilians", role_ability_types: ["heal"], is_default: true },
+      { name: "Журналіст", enabled: true, min_players: 17, description: "", alignment: "good", faction: "civilians", role_ability_types: ["inspect"], is_default: true },
+      { name: "Адвокат", enabled: true, min_players: 3, description: "", alignment: "evil", faction: "mafia", role_ability_types: ["protect"], is_default: true },
+      { name: "Клоун", enabled: true, min_players: 18, description: "", alignment: "neutral", faction: "civilians", role_ability_types: ["custom_effect_swap_roles"], is_default: true },
+      { name: "Брехун", enabled: true, min_players: 3, description: "", alignment: "evil", faction: "mafia", role_ability_types: ["custom_effect_falsify"], is_default: true },
+      { name: "Диявол", enabled: true, min_players: 3, description: "", alignment: "neutral", faction: "devil", role_ability_types: ["custom_effect_custom"], is_default: true },
+    ];
     const sel = $("group_select");
     const defaultGid = (q.get("default_gid") || "").trim();
     if (groups.length > 0) {
@@ -532,6 +554,8 @@
     let roleStateByName = {};
     let selectedRoleName = "";
     let createRolePreviewConfirmed = false;
+    /** false — список ролей з канонічного шаблону (немає даних з БД у URL); не шлемо roles_updates, щоб не затерти БД */
+    let roleEditsTrusted = false;
 
     function alignmentLabel(v) {
       const x = String(v || "good");
@@ -543,8 +567,13 @@
       const x = String(v || "civilians");
       if (x === "mafia") return "Мафія";
       if (x === "neutral") return "Нейтрали";
+      if (x === "maniac") return "Маніяк";
+      if (x === "devil") return "Диявол";
+      if (x === "suicide") return "Самогубець";
       return "Мирні";
     }
+
+    const KNOWN_FACTIONS = new Set(["civilians", "mafia", "neutral", "maniac", "devil", "suicide"]);
 
     function normalizeRole(role) {
       const alignRaw = String(role.alignment || "good").trim().toLowerCase();
@@ -552,7 +581,7 @@
         alignRaw.includes("evil") || alignRaw.includes("mafia") ? "evil" :
         alignRaw.includes("neutral") ? "neutral" : "good";
       const factionRaw = String(role.faction || "civilians").trim().toLowerCase();
-      const faction = ["civilians", "mafia", "neutral"].includes(factionRaw) ? factionRaw : "civilians";
+      const faction = KNOWN_FACTIONS.has(factionRaw) ? factionRaw : "civilians";
       return {
         name: String(role.name || "").trim(),
         enabled: role.enabled !== false,
@@ -632,7 +661,7 @@
         description: newRoleDesc || `Кастомна роль: ${newRoleName}`,
         min_players: Number.isFinite(newRoleMin) ? newRoleMin : 1,
         alignment: ["good", "evil", "neutral"].includes(newRoleAlignment) ? newRoleAlignment : "good",
-        faction: ["civilians", "mafia", "neutral"].includes(newRoleFaction) ? newRoleFaction : "civilians",
+        faction: KNOWN_FACTIONS.has(newRoleFaction) ? newRoleFaction : "civilians",
         enabled: newRoleEnabled,
         role_ability_types: getNewRoleAbilityTypes()
       };
@@ -755,8 +784,11 @@
       const key = String(groupId || "");
       let list = Array.isArray(rolePresets[key]) ? rolePresets[key] : [];
       if (!list.length) {
-        // fallback: базовий набір ролей, щоб конструктор працював навіть без пресету з бекенду
-        list = fallbackDefaultRoles;
+        // Немає role_presets у URL (коротке посилання) або порожній об’єкт — канонічні дефолти як у боті
+        list = canonicalDefaultRoles;
+        roleEditsTrusted = false;
+      } else {
+        roleEditsTrusted = true;
       }
       if (!list.length) {
         renderRoleList();
@@ -896,7 +928,7 @@
         const r = roleStateByName[selectedRoleName];
         if (!r) return;
         const v = String($("editor_role_faction").value || "civilians");
-        r.faction = ["civilians", "mafia", "neutral"].includes(v) ? v : "civilians";
+        r.faction = KNOWN_FACTIONS.has(v) ? v : "civilians";
         renderRoleList();
       });
       $("editor_role_desc").addEventListener("input", () => {
@@ -912,7 +944,7 @@
       const activeTab = (window.__activeTab || "roles");
       const isRolesTab = activeTab === "roles";
       const isCreateRoleTab = activeTab === "create_role";
-      const roles_updates = isRolesTab ? Object.values(roleStateByName).map((r) => ({
+      let roles_updates = isRolesTab ? Object.values(roleStateByName).map((r) => ({
         name: r.name,
         enabled: !!r.enabled,
         min_players: Number(r.min_players || 1),
@@ -921,6 +953,10 @@
         description: r.description || "",
         role_ability_types: Array.isArray(r.role_ability_types) ? r.role_ability_types : []
       })) : [];
+      // Канонічний шаблон замість даних з БД — не перезаписуємо реальні налаштування ролей.
+      if (isRolesTab && !roleEditsTrusted) {
+        roles_updates = [];
+      }
       let create_role = null;
       if (isCreateRoleTab) {
         create_role = collectCreateRoleDraft();
