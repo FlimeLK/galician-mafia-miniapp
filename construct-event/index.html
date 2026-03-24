@@ -450,8 +450,16 @@
         const arr = JSON.parse(raw);
         if (!Array.isArray(arr)) return [];
         return arr
-          .map((g) => ({ id: String(g.id || "").trim(), title: String(g.title || g.id || "").trim() }))
-          .filter((g) => g.id);
+          .map((g) => {
+            if (g !== null && typeof g === "object" && !Array.isArray(g)) {
+              const id = String(g.id ?? "").trim();
+              const title = String(g.title ?? g.id ?? "").trim();
+              return id ? { id, title: title || id } : null;
+            }
+            const id = String(g).trim();
+            return id ? { id, title: id } : null;
+          })
+          .filter(Boolean);
       } catch (e) {
         return [];
       }
@@ -549,6 +557,9 @@
       opt.textContent = "Немає автосписку груп";
       sel.appendChild(opt);
       sel.disabled = true;
+      if (defaultGid) {
+        $("group_id").value = defaultGid;
+      }
     }
 
     let roleStateByName = {};
